@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include <engine/resourceManager.hpp>
+#include <engine/utility.hpp>
 
 #include <EC/Meta/Meta.hpp>
 
@@ -27,6 +28,7 @@ shipPos(480.0f, 480.0f)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
+    context.resourceManager->registerTexture(*this, "res/volumeButton.png");
     context.resourceManager->loadResources();
 
     sf::Texture& planetTexture = context.resourceManager->getTexture("res/Planet.png");
@@ -45,6 +47,11 @@ shipPos(480.0f, 480.0f)
         ship[i].setPosition(480.0f, 540.0f);
     }
     ship[1].setColor(sf::Color(127, 55, 255));
+
+    sf::Texture& volumeTexture = context.resourceManager->getTexture("res/volumeButton.png");
+
+    volumeButton.setTexture(volumeTexture);
+    volumeButton.setTextureRect(sf::IntRect(0, 0, 64, 64));
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
 
@@ -155,6 +162,17 @@ void GameScreen::draw(Context context)
     drawRect.setFillColor(asteroidColor);
 
     context.window->draw(drawRect);
+
+    if((flags & 0x100) == 0)
+    {
+        volumeButton.setTextureRect(sf::IntRect(0, 0, 64, 64));
+        context.window->draw(volumeButton);
+    }
+    else
+    {
+        volumeButton.setTextureRect(sf::IntRect(64, 0, 64, 64));
+        context.window->draw(volumeButton);
+    }
 
     if(++drawFrameTimer >= 60)
     {
@@ -275,6 +293,8 @@ bool GameScreen::update(sf::Time dt, Context context)
         garbageTimer = 0;
     }
 
+    volumeButton.setPosition(view.getCenter().x - view.getSize().x / 2.0f, view.getCenter().y - view.getSize().y / 2.0f);
+
     return false;
 }
 
@@ -331,6 +351,25 @@ bool GameScreen::handleEvent(const sf::Event& event, Context context)
             flags &= 0xFFFFFFFFFFFFFFF7;
         }
     }
+    else if(event.type == sf::Event::MouseButtonPressed)
+    {
+        if(event.mouseButton.x >= 0 &&
+            event.mouseButton.x <= 64 &&
+            event.mouseButton.y >= 0 &&
+            event.mouseButton.y <= 64)
+        {
+            flags = ((~flags) & 0x100) | (flags & 0xFFFFFFFFFFFFFEFF);
+            if((flags & 0x100) != 0)
+            {
+                bgMusic.pause();
+            }
+            else
+            {
+                bgMusic.play();
+            }
+        }
+    }
+
     return false;
 }
 
@@ -455,6 +494,26 @@ void GameScreen::playerInput(sf::Time dt)
             shipPos.x += amount;
             shipPos.y += amount;
         }
+    }
+
+    sf::Vector2f windowSize = view.getSize();
+
+    if(shipPos.x - GAME_SHIP_LIMIT_RADIUS < 0)
+    {
+        shipPos.x = GAME_SHIP_LIMIT_RADIUS;
+    }
+    else if(shipPos.x + GAME_SHIP_LIMIT_RADIUS > windowSize.x)
+    {
+        shipPos.x = windowSize.x - GAME_SHIP_LIMIT_RADIUS;
+    }
+
+    if(shipPos.y - GAME_SHIP_LIMIT_RADIUS < 0)
+    {
+        shipPos.y = GAME_SHIP_LIMIT_RADIUS;
+    }
+    else if(shipPos.y + GAME_SHIP_LIMIT_RADIUS > windowSize.y)
+    {
+        shipPos.y = windowSize.y - GAME_SHIP_LIMIT_RADIUS;
     }
 }
 

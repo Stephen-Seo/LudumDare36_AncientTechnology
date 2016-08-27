@@ -6,6 +6,7 @@
 #define GAME_THRUSTER_FLICKER_RATE 0.04f
 #define GAME_THRUSTER_COLOR_FADE_RATE 1.5f
 #define GAME_PLAYER_SPEED 200.0f
+#define GAME_SHIP_LIMIT_RADIUS 16.0f
 
 #include <engine/state.hpp>
 
@@ -37,6 +38,8 @@ private:
         0010 0000 - down
         0100 0000 - left
         1000 0000 - right
+
+        0001 0000 0000 - mute music
     */
     uint64_t flags;
     std::uniform_real_distribution<> rdist;
@@ -52,6 +55,7 @@ private:
     sf::Vector2f shipPos;
     sf::Music bgMusic;
     sf::Vector2i mousePos;
+    sf::Sprite volumeButton;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt);
