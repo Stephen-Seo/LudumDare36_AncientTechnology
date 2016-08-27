@@ -13,6 +13,7 @@
 #include <random>
 
 #include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
 
 class GameScreen : public State
 {
@@ -49,6 +50,8 @@ private:
     sf::Sprite ship[2];
     float shipTimer[2];
     sf::Vector2f shipPos;
+    sf::Music bgMusic;
+    sf::Vector2i mousePos;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt);

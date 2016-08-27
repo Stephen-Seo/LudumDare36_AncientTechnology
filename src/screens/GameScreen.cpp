@@ -34,7 +34,7 @@ shipPos(480.0f, 480.0f)
 
     planetRect.setSize(sf::Vector2f(1024.0f, 1024.0f));
     planetRect.setTexture(&planetTexture, true);
-    planetRect.setPosition((1024.0f - 960.0f) / -2.0f, 540.0f - 128.0f);
+    planetRect.setPosition((1024.0f - 960.0f) / -2.0f, 540.0f - 192.0f);
 
     for(unsigned int i = 0; i < 2; ++i)
     {
@@ -64,6 +64,10 @@ shipPos(480.0f, 480.0f)
     view = context.window->getView();
     view.setCenter(sf::Vector2f(view.getSize().x / 2.0f, 405.0f + view.getSize().y / 2.0f));
     context.window->setView(view);
+
+    bgMusic.openFromFile("res/LudumDare36_SpaceFight.ogg");
+    bgMusic.setLoop(true);
+    bgMusic.play();
 }
 
 GameScreen::~GameScreen()
@@ -189,6 +193,16 @@ bool GameScreen::update(sf::Time dt, Context context)
 
     animateShipThruster(dt);
 
+    // aim ship at mouse
+    sf::Vector2f v = context.window->mapPixelToCoords(mousePos);
+    v = v - ship[0].getPosition();
+    float angle = std::atan2(v.y, v.x) + std::acos(-1) / 2.0f;
+    for(unsigned int i = 0; i < 2; ++i)
+    {
+        ship[i].setRotation(angle * 180 / std::acos(-1));
+    }
+
+
     Position asteroidPos;
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
@@ -268,13 +282,8 @@ bool GameScreen::handleEvent(const sf::Event& event, Context context)
 {
     if(event.type == sf::Event::MouseMoved)
     {
-        sf::Vector2f v = context.window->mapPixelToCoords(sf::Vector2i(event.mouseMove.x, event.mouseMove.y));
-        v = v - ship[0].getPosition();
-        float angle = std::atan2(v.y, v.x) + std::acos(-1) / 2.0f;
-        for(unsigned int i = 0; i < 2; ++i)
-        {
-            ship[i].setRotation(angle * 180 / std::acos(-1));
-        }
+//        mousePos = context.window->mapPixelToCoords(sf::Vector2i(event.mouseMove.x, event.mouseMove.y));
+        mousePos = sf::Vector2i(event.mouseMove.x, event.mouseMove.y);
     }
     else if(event.type == sf::Event::KeyPressed)
     {
