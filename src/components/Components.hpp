@@ -11,6 +11,7 @@
 #include "AngularVelocity.hpp"
 #include "Offset.hpp"
 #include "Size.hpp"
+#include "Timer.hpp"
 
 using GameComponentsList = EC::Meta::TypeList<
     Position,
@@ -19,7 +20,8 @@ using GameComponentsList = EC::Meta::TypeList<
     Rotation,
     AngularVelocity,
     Offset,
-    Size
+    Size,
+    Timer
 >;
 
 struct TPlayer {};
