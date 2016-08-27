@@ -16,6 +16,17 @@
  #include <ios>
 #endif
 
+const float GameScreen::playerEdges[16] = {
+    -16.0f, -32.0f,
+    0.0f, -32.0f,
+    16.0f, -32.0f,
+    16.0f, 0.0f,
+    16.0f, 32.0f,
+    0.0f, 32.0f,
+    -16.0f, 32.0f,
+    -16.0f, 0.0f
+};
+
 GameScreen::GameScreen(StateStack& stack, Context context) :
 State(stack, context),
 flags(0),
@@ -225,7 +236,7 @@ bool GameScreen::update(sf::Time dt, Context context)
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
 
-    gc->gameManager.forMatchingSignature<EntitySignature>([&gc, &dt, &asteroidPos]
+    gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &asteroidPos]
        (std::size_t eid,
         Position& pos,
         Velocity& vel,
@@ -255,6 +266,58 @@ bool GameScreen::update(sf::Time dt, Context context)
         if(gc->gameManager.hasTag<TAsteroid>(eid))
         {
             asteroidPos = pos;
+
+            // collision detection between player and asteroid
+            // x = x * cos + y * sin
+            // y = x * -sin + y * cos
+            // [  cos  sin ]
+            // [ -sin  cos ]
+            // ??? probably if memory serves me correctly
+            // TODO fix
+
+            sf::Transform transform;
+            transform.rotate(rotation.rotation, pos.x, pos.y);
+            sf::VertexArray coords(sf::PrimitiveType::Points, 4);
+            coords[0].position = transform * sf::Vector2f(
+                pos.x - size.width / 2.0f,
+                pos.y - size.height / 2.0f);
+            coords[1].position = transform * sf::Vector2f(
+                pos.x + size.width / 2.0f,
+                pos.y - size.height / 2.0f);
+            coords[2].position = transform * sf::Vector2f(
+                pos.x + size.width / 2.0f,
+                pos.y + size.height / 2.0f);
+            coords[3].position = transform * sf::Vector2f(
+                pos.x - size.width / 2.0f,
+                pos.y + size.height / 2.0f);
+
+            transform = sf::Transform::Identity;
+            transform.rotate(this->ship[0].getRotation(), this->ship[0].getPosition());
+            sf::Vector2f shipEdge;
+#ifndef NDEBUG
+            bool noCollide = true;
+#endif
+            for(unsigned int i = 0; i < 16; i += 2)
+            {
+                shipEdge = transform * (this->ship[0].getPosition() +
+                    sf::Vector2f(GameScreen::playerEdges[i], GameScreen::playerEdges[i + 1]));
+                if(Utility::isWithinPolygon(coords, shipEdge.x, shipEdge.y))
+                {
+                    this->ship[0].setColor(sf::Color::Red);
+#ifndef NDEBUG
+                    std::cout << "colliding" << std::endl;
+                    noCollide = false;
+#endif
+                    break;
+                }
+                    this->ship[0].setColor(sf::Color::White);
+            }
+#ifndef NDEBUG
+            if(noCollide)
+            {
+                std::cout << "Not colliding" << std::endl;
+            }
+#endif
         }
     });
 

@@ -22,6 +22,8 @@ public:
     GameScreen(StateStack& stack, Context context);
     virtual ~GameScreen() override;
 
+    static const float playerEdges[16];
+
     virtual void draw(Context context) override;
     virtual bool update(sf::Time dt, Context context) override;
     virtual bool handleEvent(const sf::Event& event, Context context) override;
