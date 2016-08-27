@@ -13,6 +13,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/SFML_GameEngine/src SFML_GameEngine
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/EntityComponentMetaSystem/src EntityComponentMetaSystemBuild)
 
 set(LudumDare36_SOURCES
+    src/screens/GameScreen.cpp
     src/main.cpp)
 
 add_executable(LudumDare36 ${LudumDare36_SOURCES})
@@ -27,6 +28,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release")
 endif()
 
-target_include_directories(LudumDare36 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/SFML_GameEngine/src ${CMAKE_CURRENT_SOURCE_DIR}/EntityComponentMetaSystem/src)
+target_include_directories(LudumDare36 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/SFML_GameEngine/src ${CMAKE_CURRENT_SOURCE_DIR}/EntityComponentMetaSystem/src)
 target_link_libraries(LudumDare36 SFML_GameEngine)
 
