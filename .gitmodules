@@ -1,0 +1,6 @@
+[submodule "SFML_GameEngine"]
+	path = SFML_GameEngine
+	url = sGithub:Stephen-Seo/SFML_GameEngine.git
+[submodule "EntityComponentMetaSystem"]
+	path = EntityComponentMetaSystem
+	url = sGithub:Stephen-Seo/EntityComponentMetaSystem.git
