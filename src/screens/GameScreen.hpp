@@ -44,6 +44,8 @@
 #define GAME_ASTEROID_PROJECTILE_PHASE_5_LIFETIME 5.0f
 #define GAME_CENTER_ASTEROID_SPEED 50.0f
 #define GAME_ASTEROID_DEATH_TIME 7.0f
+#define GAME_PLAYER_DEAD_GAMEOVER_TIMER 3.0f
+#define GAME_INSTRUCTIONS_TIME 5.0f
 
 #include <engine/state.hpp>
 
@@ -81,6 +83,7 @@ private:
         0001 0000 0000 - mute music
         0010 0000 0000 - screen flash fast
         0100 0000 0000 - screen flash slow
+        1000 0000 0000 - disable instructions
     */
     uint64_t flags;
     std::uniform_real_distribution<> rdist;
@@ -111,6 +114,8 @@ private:
     float screenFlashTimer;
     float asteroidFireTimer;
     float asteroidRotationAngle;
+    float playerDeadTimer;
+    sf::Sprite instructions;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt, Context context);

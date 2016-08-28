@@ -14,6 +14,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/EntityComponentMetaSystem/src Entit
 
 set(LudumDare36_SOURCES
     src/screens/GameScreen.cpp
+    src/screens/GameOverScreen.cpp
     src/main.cpp)
 
 add_executable(LudumDare36 ${LudumDare36_SOURCES})

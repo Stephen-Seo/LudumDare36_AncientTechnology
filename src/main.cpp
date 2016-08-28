@@ -3,6 +3,7 @@
 #include "GameContext.hpp"
 
 #include "screens/GameScreen.hpp"
+#include "screens/GameOverScreen.hpp"
 
 int main(int argc, char** argv)
 {
@@ -11,6 +12,7 @@ int main(int argc, char** argv)
     Game game(&gameContext);
 
     game.registerState<GameScreen>("GameScreen");
+    game.registerState<GameOverScreen>("GameOver");
     game.setStartingState("GameScreen");
 
     game.run();

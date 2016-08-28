@@ -46,13 +46,15 @@ asteroidExplosionsTimer(0.0f),
 asteroidExplosionsCount(0),
 screenFlashTimer(0),
 asteroidFireTimer(0),
-asteroidRotationAngle(0)
+asteroidRotationAngle(0),
+playerDeadTimer(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
     context.resourceManager->registerTexture(*this, "res/volumeButton.png");
     context.resourceManager->registerTexture(*this, "res/healthBar.png");
     context.resourceManager->registerTexture(*this, "res/asteroidSymbol.png");
+    context.resourceManager->registerTexture(*this, "res/instructions.png");
     context.resourceManager->loadResources();
 
     sf::Texture& planetTexture = context.resourceManager->getTexture("res/Planet.png");
@@ -85,6 +87,8 @@ asteroidRotationAngle(0)
         healthBar[i].setTextureRect(sf::IntRect(i * 64, 0, 64, 160));
         healthBar[i].setColor(sf::Color(255, 255, 255, 127));
     }
+
+    instructions.setTexture(context.resourceManager->getTexture("res/instructions.png"), true);
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
 
@@ -276,6 +280,11 @@ void GameScreen::draw(Context context)
         context.window->draw(volumeButton);
     }
 
+    if((flags & 0x800) == 0)
+    {
+        context.window->draw(instructions);
+    }
+
     context.window->draw(healthBar[0]);
     context.window->draw(healthBar[1]);
 
@@ -327,6 +336,14 @@ bool GameScreen::update(sf::Time dt, Context context)
             context.window->setView(view);
         }
     }
+    else if((flags & 0x800) == 0)
+    {
+        if(timer >= GAME_INSTRUCTIONS_TIME)
+        {
+            timer = 0;
+            flags |= 0x800;
+        }
+    }
     else if(asteroidPhase == 6)
     {
         if(timer >= GAME_ASTEROID_DEATH_TIME)
@@ -340,6 +357,18 @@ bool GameScreen::update(sf::Time dt, Context context)
             {
                 bgMusic.play();
             }
+        }
+    }
+
+    if(playerHP <= 0)
+    {
+        playerDeadTimer += dt.asSeconds();
+        if(playerDeadTimer >= GAME_PLAYER_DEAD_GAMEOVER_TIMER)
+        {
+            requestStackClear();
+            requestStackPush("GameOver");
+
+            gc->gameManager = GameContext::GameManager();
         }
     }
 
