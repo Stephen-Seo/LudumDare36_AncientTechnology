@@ -45,7 +45,8 @@ asteroidPhase(0),
 asteroidExplosionsTimer(0.0f),
 asteroidExplosionsCount(0),
 screenFlashTimer(0),
-asteroidFireTimer(0)
+asteroidFireTimer(0),
+asteroidRotationAngle(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
@@ -82,6 +83,7 @@ asteroidFireTimer(0)
     {
         healthBar[i].setTexture(healthBarTexture);
         healthBar[i].setTextureRect(sf::IntRect(i * 64, 0, 64, 160));
+        healthBar[i].setColor(sf::Color(255, 255, 255, 127));
     }
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
@@ -210,7 +212,7 @@ void GameScreen::draw(Context context)
     drawRect.setOrigin(aOffset.x, aOffset.y);
     drawRect.setRotation(aRot.rotation);
 
-    if(drawFrameTimer % 10 == 0)
+    if(asteroidPhase <= 5 && drawFrameTimer % 10 == 0)
     {
         float r = rdist(*context.randomEngine);
         asteroidColor = sf::Color(
@@ -219,22 +221,42 @@ void GameScreen::draw(Context context)
             (unsigned char)(r * 35.0f + 35.0f)
         );
     }
-    drawRect.setFillColor(asteroidColor);
+    else if(asteroidPhase == 6)
+    {
+        asteroidColor = sf::Color(
+            asteroidColor.r,
+            asteroidColor.g,
+            asteroidColor.b,
+            255.0f * (1.0f - timer / GAME_ASTEROID_DEATH_TIME)
+        );
+    }
 
-    context.window->draw(drawRect);
+    if(asteroidPhase <= 6)
+    {
+        drawRect.setFillColor(asteroidColor);
+        context.window->draw(drawRect);
+    }
 
     // draw asteroid symbol
     drawRect.setTexture(asteroidSymbolTexture, true);
-    if(asteroidPhase != 0)
-    {
-        drawRect.setFillColor(sf::Color::White);
-    }
-    else
+    if(asteroidPhase == 0)
     {
         int alpha = (int)(255.0f * (1.0f - (float)asteroidHP / (float)GAME_ASTEROID_PHASE_0_HP));
         drawRect.setFillColor(sf::Color(255, 255, 255, alpha));
     }
-    context.window->draw(drawRect);
+    else if(asteroidPhase <= 5)
+    {
+        drawRect.setFillColor(sf::Color::White);
+    }
+    else if(asteroidPhase == 6)
+    {
+        drawRect.setFillColor(sf::Color(255, 255, 255, 255.0f * (1.0f - timer / GAME_ASTEROID_DEATH_TIME)));
+    }
+
+    if(asteroidPhase <= 6)
+    {
+        context.window->draw(drawRect);
+    }
     drawRect.setTexture(nullptr);
 
     // draw explosions
@@ -285,6 +307,8 @@ void GameScreen::draw(Context context)
 
 bool GameScreen::update(sf::Time dt, Context context)
 {
+    GameContext* gc = static_cast<GameContext*>(context.extraContext);
+
     timer += dt.asSeconds();
     if((flags & 0x1) == 0)
     {
@@ -301,6 +325,15 @@ bool GameScreen::update(sf::Time dt, Context context)
             flags |= 0x1;
             view.setCenter(sf::Vector2f(view.getSize().x / 2.0f, view.getSize().y / 2.0f));
             context.window->setView(view);
+        }
+    }
+    else if(asteroidPhase == 6)
+    {
+        if(timer >= GAME_ASTEROID_DEATH_TIME)
+        {
+            asteroidPhase = 7;
+            timer = 0;
+            gc->gameManager.deleteEntity(asteroidID);
         }
     }
 
@@ -368,8 +401,6 @@ bool GameScreen::update(sf::Time dt, Context context)
 
     Position asteroidPos;
 
-    GameContext* gc = static_cast<GameContext*>(context.extraContext);
-
     gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &asteroidPos, &context]
        (std::size_t eid,
         Position& pos,
@@ -395,6 +426,15 @@ bool GameScreen::update(sf::Time dt, Context context)
         else if(rotation.rotation < 0)
         {
             rotation.rotation += 360.0f;
+        }
+
+        if(asteroidPhase == 4 && gc->gameManager.hasTag<TAsteroid>(eid))
+        {
+            if(pos.y > 270.0f)
+            {
+                pos.y = 270.0f;
+                vel.y = 0;
+            }
         }
 
         if(gc->gameManager.hasTag<TAsteroid>(eid) || gc->gameManager.hasTag<TAsteroidProjectile>(eid))
@@ -454,7 +494,7 @@ bool GameScreen::update(sf::Time dt, Context context)
                 {
                     if(gc->gameManager.hasTag<TProjectile>(eid) && Utility::isWithinPolygon(coords, pos.x, pos.y))
                     {
-                        this->asteroidHurt(1);
+                        this->asteroidHurt(1, context);
                         gc->gameManager.deleteEntity(eid);
                     }
                 });
@@ -462,7 +502,7 @@ bool GameScreen::update(sf::Time dt, Context context)
         }
     });
 
-    gc->gameManager.forMatchingSignature<EC::Meta::TypeList<Timer> >([&dt, &gc]
+    gc->gameManager.forMatchingSignature<EC::Meta::TypeList<Timer> >([this, &dt, &gc]
         (std::size_t eid,
         Timer& timer)
     {
@@ -470,28 +510,39 @@ bool GameScreen::update(sf::Time dt, Context context)
         if((gc->gameManager.hasTag<TParticle>(eid) && timer.time >= GAME_ASTEROID_PARTICLE_LIFETIME) ||
             (gc->gameManager.hasTag<TProjectile>(eid) && timer.time >= GAME_FIRE_LIFETIME) ||
             (gc->gameManager.hasTag<TExplosion>(eid) && timer.time >= GAME_EXPLOSION_LIFETIME) ||
-            (gc->gameManager.hasTag<TAsteroidProjectile>(eid) && timer.time >= GAME_ASTEROID_PROJECTILE_LIFETIME))
+            (gc->gameManager.hasTag<TAsteroidProjectile>(eid) &&
+                (
+                (this->asteroidPhase == 1 && timer.time >= GAME_ASTEROID_PROJECTILE_LIFETIME) ||
+                (this->asteroidPhase == 2 && timer.time >= GAME_ASTEROID_PROJECTILE_PHASE_2_LIFETIME) ||
+                (this->asteroidPhase == 3 && timer.time >= GAME_ASTEROID_PROJECTILE_PHASE_3_LIFETIME) ||
+                (this->asteroidPhase == 4 && timer.time >= GAME_ASTEROID_PROJECTILE_PHASE_4_LIFETIME) ||
+                (this->asteroidPhase == 5 && timer.time >= GAME_ASTEROID_PROJECTILE_PHASE_5_LIFETIME)
+                )
+            ))
         {
             gc->gameManager.deleteEntity(eid);
         }
     });
 
-    auto eid = gc->gameManager.addEntity();
-    gc->gameManager.addComponent<Position>(eid, 
-        asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
-        asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
-    );
-    gc->gameManager.addComponent<Velocity>(eid);
-    gc->gameManager.addComponent<Acceleration>(eid,
-        (rdist(*context.randomEngine) * 80.0f - 40.0f),
-        -200.0f + (rdist(*context.randomEngine) * 80.0f - 40.0f)
-    );
-    gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
-    gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 70.0f);
-    gc->gameManager.addComponent<Offset>(eid, 8.0f, 8.0f);
-    gc->gameManager.addComponent<Size>(eid, 16.0f, 16.0f);
-    gc->gameManager.addComponent<Timer>(eid);
-    gc->gameManager.addTag<TParticle>(eid);
+    if(asteroidPhase <= 6)
+    {
+        auto eid = gc->gameManager.addEntity();
+        gc->gameManager.addComponent<Position>(eid, 
+            asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+            asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+        );
+        gc->gameManager.addComponent<Velocity>(eid);
+        gc->gameManager.addComponent<Acceleration>(eid,
+            (rdist(*context.randomEngine) * 80.0f - 40.0f),
+            -200.0f + (rdist(*context.randomEngine) * 80.0f - 40.0f)
+        );
+        gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+        gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 70.0f);
+        gc->gameManager.addComponent<Offset>(eid, 8.0f, 8.0f);
+        gc->gameManager.addComponent<Size>(eid, 16.0f, 16.0f);
+        gc->gameManager.addComponent<Timer>(eid);
+        gc->gameManager.addTag<TParticle>(eid);
+    }
 
     ++garbageTimer;
     if(garbageTimer >= 300)
@@ -519,11 +570,7 @@ bool GameScreen::update(sf::Time dt, Context context)
             dir /= std::sqrt(dir.x * dir.x + dir.y * dir.y);
             dir *= GAME_ASTEROID_PHASE_1_FIRE_SPEED;
 
-#ifndef NDEBUG
-//            std::cout << "Asteroid projectile speed: " << dir.x << ' ' << dir.y << std::endl;
-#endif
-
-            eid = gc->gameManager.addEntity();
+            auto eid = gc->gameManager.addEntity();
             gc->gameManager.addComponent<Position>(eid,
                 aProjectilePos.x,
                 aProjectilePos.y
@@ -531,6 +578,208 @@ bool GameScreen::update(sf::Time dt, Context context)
             gc->gameManager.addComponent<Velocity>(eid,
                 dir.x,
                 dir.y
+            );
+            gc->gameManager.addComponent<Acceleration>(eid);
+            gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+            gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+            gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+            gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+            gc->gameManager.addComponent<Timer>(eid);
+            gc->gameManager.addTag<TAsteroidProjectile>(eid);
+        }
+    }
+    else if(asteroidPhase == 2)
+    {
+        asteroidFireTimer += dt.asSeconds();
+        if(asteroidFireTimer >= GAME_ASTEROID_PHASE_2_FIRE_TIME)
+        {
+            asteroidFireTimer = 0;
+
+            for(int i = 0; i < 3; ++i)
+            {
+                sf::Vector2f aProjectilePos(
+                    asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                    asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+                );
+
+                sf::Vector2f dir = ship[0].getPosition() - aProjectilePos;
+                dir /= std::sqrt(dir.x * dir.x + dir.y * dir.y);
+                dir *= GAME_ASTEROID_PHASE_2_FIRE_SPEED;
+
+                sf::Transform transform;
+                transform.rotate((i - 1) * 30);
+                dir = transform * dir;
+
+                auto eid = gc->gameManager.addEntity();
+                gc->gameManager.addComponent<Position>(eid,
+                    aProjectilePos.x,
+                    aProjectilePos.y
+                );
+                gc->gameManager.addComponent<Velocity>(eid,
+                    dir.x,
+                    dir.y
+                );
+                gc->gameManager.addComponent<Acceleration>(eid);
+                gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+                gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+                gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+                gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+                gc->gameManager.addComponent<Timer>(eid);
+                gc->gameManager.addTag<TAsteroidProjectile>(eid);
+            }
+        }
+    }
+    else if(asteroidPhase == 3)
+    {
+        asteroidFireTimer += dt.asSeconds();
+        if(asteroidFireTimer >= GAME_ASTEROID_PHASE_3_FIRE_TIME)
+        {
+            asteroidFireTimer = 0;
+
+            sf::Vector2f aProjectilePos(
+                asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+            );
+
+            sf::Vector2f dir = ship[0].getPosition() - aProjectilePos;
+            dir /= std::sqrt(dir.x * dir.x + dir.y * dir.y);
+            sf::Vector2f vel = dir * GAME_ASTEROID_PHASE_3_FIRE_SPEED;
+            sf::Vector2f accel = dir * GAME_ASTEROID_PHASE_3_FIRE_ACCEL;
+
+            auto eid = gc->gameManager.addEntity();
+            gc->gameManager.addComponent<Position>(eid,
+                aProjectilePos.x,
+                aProjectilePos.y
+            );
+            gc->gameManager.addComponent<Velocity>(eid,
+                vel.x,
+                vel.y
+            );
+            gc->gameManager.addComponent<Acceleration>(eid,
+                accel.x,
+                accel.y
+            );
+            gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+            gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+            gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+            gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+            gc->gameManager.addComponent<Timer>(eid);
+            gc->gameManager.addTag<TAsteroidProjectile>(eid);
+
+
+            vel = dir * GAME_ASTEROID_PHASE_3_FIRE_ALT_SPEED;
+            eid = gc->gameManager.addEntity();
+            gc->gameManager.addComponent<Position>(eid,
+                asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+            );
+            gc->gameManager.addComponent<Velocity>(eid,
+                vel.x,
+                vel.y
+            );
+            gc->gameManager.addComponent<Acceleration>(eid);
+            gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+            gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+            gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+            gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+            gc->gameManager.addComponent<Timer>(eid);
+            gc->gameManager.addTag<TAsteroidProjectile>(eid);
+        }
+    }
+    else if(asteroidPhase == 4)
+    {
+        asteroidFireTimer += dt.asSeconds();
+        if(asteroidFireTimer >= GAME_ASTEROID_PHASE_4_FIRE_TIME)
+        {
+            asteroidFireTimer = 0;
+
+            sf::Vector2f dir(
+                asteroidPos.x,
+                asteroidPos.y
+            );
+
+            dir = ship[0].getPosition() - dir;
+            dir /= std::sqrt(dir.x * dir.x + dir.y * dir.y);
+
+            sf::Transform transform;
+
+            for(unsigned int i = 0; i < 8; ++i)
+            {
+                transform.rotate(45);
+
+                sf::Vector2f vel = transform * dir * GAME_ASTEROID_PHASE_4_FIRE_SPEED;
+
+                auto eid = gc->gameManager.addEntity();
+                gc->gameManager.addComponent<Position>(eid,
+                    asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                    asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+                );
+                gc->gameManager.addComponent<Velocity>(eid,
+                    vel.x,
+                    vel.y
+                );
+                gc->gameManager.addComponent<Acceleration>(eid);
+                gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+                gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+                gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+                gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+                gc->gameManager.addComponent<Timer>(eid);
+                gc->gameManager.addTag<TAsteroidProjectile>(eid);
+            }
+        }
+    }
+    else if(asteroidPhase == 5)
+    {
+        asteroidFireTimer += dt.asSeconds();
+        if(asteroidFireTimer >= GAME_ASTEROID_PHASE_5_FIRE_TIME)
+        {
+            asteroidFireTimer = 0;
+
+            sf::Vector2f dir(
+                asteroidPos.x,
+                asteroidPos.y
+            );
+
+            dir = ship[0].getPosition() - dir;
+            dir /= std::sqrt(dir.x * dir.x + dir.y * dir.y);
+
+            sf::Transform transform;
+            transform.rotate(45);
+
+            for(unsigned int i = 0; i < 4; ++i)
+            {
+                transform.rotate(90);
+
+                sf::Vector2f vel = transform * dir * GAME_ASTEROID_PHASE_5_FIRE_SPEED;
+
+                auto eid = gc->gameManager.addEntity();
+                gc->gameManager.addComponent<Position>(eid,
+                    asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                    asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+                );
+                gc->gameManager.addComponent<Velocity>(eid,
+                    vel.x,
+                    vel.y
+                );
+                gc->gameManager.addComponent<Acceleration>(eid);
+                gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+                gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+                gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+                gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+                gc->gameManager.addComponent<Timer>(eid);
+                gc->gameManager.addTag<TAsteroidProjectile>(eid);
+            }
+
+            sf::Vector2f vel = dir * GAME_ASTEROID_PHASE_5_FIRE_ALT_SPEED;
+
+            auto eid = gc->gameManager.addEntity();
+            gc->gameManager.addComponent<Position>(eid,
+                asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+            );
+            gc->gameManager.addComponent<Velocity>(eid,
+                vel.x,
+                vel.y
             );
             gc->gameManager.addComponent<Acceleration>(eid);
             gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
@@ -845,21 +1094,52 @@ void GameScreen::updateHealthBar(Context context)
     healthBar[1].setPosition(windowPos.x, windowPos.y + 540.0f - 160.0f);
 }
 
-void GameScreen::asteroidHurt(int damage)
+void GameScreen::asteroidHurt(int damage, Context context)
 {
     asteroidHP -= damage;
     if(asteroidHP <= 0)
     {
+        GameContext* gc = static_cast<GameContext*>(context.extraContext);
         switch(asteroidPhase)
         {
         case 0:
-        {
             asteroidPhase = 1;
             asteroidHP = GAME_ASTEROID_PHASE_1_HP;
             asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
             flags |= 0x200;
+            break;
+        case 1:
+            asteroidPhase = 2;
+            asteroidHP = GAME_ASTEROID_PHASE_2_HP;
+            asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
+            flags |= 0x400;
+            break;
+        case 2:
+            asteroidPhase = 3;
+            asteroidHP = GAME_ASTEROID_PHASE_3_HP;
+            asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
+            flags |= 0x200;
+            break;
+        case 3:
+        {
+            asteroidPhase = 4;
+            asteroidHP = GAME_ASTEROID_PHASE_4_HP;
+            asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
+            flags |= 0x200;
+            Velocity& aVel = gc->gameManager.getEntityData<Velocity>(asteroidID);
+            aVel.y = GAME_CENTER_ASTEROID_SPEED;
         }
             break;
+        case 4:
+            asteroidPhase = 5;
+            asteroidHP = GAME_ASTEROID_PHASE_5_HP;
+            asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
+            flags |= 0x200;
+            break;
+        case 5:
+            asteroidPhase = 6;
+            timer = 0;
+            asteroidExplosionsCount = 0xFFFFFFFF;
         default:
             break;
         }
@@ -872,7 +1152,7 @@ void GameScreen::checkAsteroidExplosions(sf::Time dt, Context context)
     if(asteroidExplosionsTimer <= 0)
     {
         asteroidExplosionsTimer = GAME_ASTEROID_EXPLOSIONS_INTERVAL;
-        if(asteroidExplosionsCount > 0)
+        if(asteroidExplosionsCount > 0 && asteroidPhase <= 6)
         {
             --asteroidExplosionsCount;
 
