@@ -44,7 +44,8 @@ asteroidHP(GAME_ASTEROID_PHASE_0_HP),
 asteroidPhase(0),
 asteroidExplosionsTimer(0.0f),
 asteroidExplosionsCount(0),
-screenFlashTimer(0)
+screenFlashTimer(0),
+asteroidFireTimer(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
@@ -157,6 +158,10 @@ void GameScreen::draw(Context context)
                 (unsigned char)(r * 35.0f + 35.0f),
                 (unsigned char)((1.0f - timer.time / GAME_ASTEROID_PARTICLE_LIFETIME) * 255.0f)
             ));
+        }
+        else if(gc->gameManager.hasTag<TAsteroidProjectile>(eid))
+        {
+            this->drawRect.setFillColor(sf::Color::Red);
         }
         else
         {
@@ -392,11 +397,10 @@ bool GameScreen::update(sf::Time dt, Context context)
             rotation.rotation += 360.0f;
         }
 
-        if(gc->gameManager.hasTag<TAsteroid>(eid))
+        if(gc->gameManager.hasTag<TAsteroid>(eid) || gc->gameManager.hasTag<TAsteroidProjectile>(eid))
         {
-            asteroidPos = pos;
 
-            // collision detection between player and asteroid
+            // collision detection between player and asteroid (projectiles)
             // x = x * cos + y * -sin
             // y = x * sin + y * cos
             // [  cos -sin ]
@@ -435,26 +439,26 @@ bool GameScreen::update(sf::Time dt, Context context)
             }
 
             // collision between asteroid and projectiles
-            gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &coords, &context]
-               (std::size_t eid,
-                Position& pos,
-                Velocity& vel,
-                Acceleration& acc,
-                Rotation& rotation,
-                AngularVelocity& vrotation,
-                Offset& offset,
-                Size& size)
+            if(gc->gameManager.hasTag<TAsteroid>(eid))
             {
-                if(!gc->gameManager.hasTag<TProjectile>(eid))
+                asteroidPos = pos;
+                gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &coords, &context]
+                   (std::size_t eid,
+                    Position& pos,
+                    Velocity& vel,
+                    Acceleration& acc,
+                    Rotation& rotation,
+                    AngularVelocity& vrotation,
+                    Offset& offset,
+                    Size& size)
                 {
-                    return;
-                }
-                if(Utility::isWithinPolygon(coords, pos.x, pos.y))
-                {
-                    this->asteroidHurt(1);
-                    gc->gameManager.deleteEntity(eid);
-                }
-            });
+                    if(gc->gameManager.hasTag<TProjectile>(eid) && Utility::isWithinPolygon(coords, pos.x, pos.y))
+                    {
+                        this->asteroidHurt(1);
+                        gc->gameManager.deleteEntity(eid);
+                    }
+                });
+            }
         }
     });
 
@@ -465,7 +469,8 @@ bool GameScreen::update(sf::Time dt, Context context)
         timer.time += dt.asSeconds();
         if((gc->gameManager.hasTag<TParticle>(eid) && timer.time >= GAME_ASTEROID_PARTICLE_LIFETIME) ||
             (gc->gameManager.hasTag<TProjectile>(eid) && timer.time >= GAME_FIRE_LIFETIME) ||
-            (gc->gameManager.hasTag<TExplosion>(eid) && timer.time >= GAME_EXPLOSION_LIFETIME))
+            (gc->gameManager.hasTag<TExplosion>(eid) && timer.time >= GAME_EXPLOSION_LIFETIME) ||
+            (gc->gameManager.hasTag<TAsteroidProjectile>(eid) && timer.time >= GAME_ASTEROID_PROJECTILE_LIFETIME))
         {
             gc->gameManager.deleteEntity(eid);
         }
@@ -496,6 +501,46 @@ bool GameScreen::update(sf::Time dt, Context context)
     }
 
     volumeButton.setPosition(view.getCenter().x - view.getSize().x / 2.0f, view.getCenter().y - view.getSize().y / 2.0f);
+
+    // asteroid phase attacks
+    if(asteroidPhase == 1)
+    {
+        asteroidFireTimer += dt.asSeconds();
+        if(asteroidFireTimer >= GAME_ASTEROID_PHASE_1_FIRE_TIME)
+        {
+            asteroidFireTimer = 0;
+
+            sf::Vector2f aProjectilePos(
+                asteroidPos.x + (rdist(*context.randomEngine) * 128.0f) - 64.0f,
+                asteroidPos.y + (rdist(*context.randomEngine) * 128.0f) - 64.0f
+            );
+
+            sf::Vector2f dir = ship[0].getPosition() - aProjectilePos;
+            dir /= std::sqrt(dir.x * dir.x + dir.y * dir.y);
+            dir *= GAME_ASTEROID_PHASE_1_FIRE_SPEED;
+
+#ifndef NDEBUG
+//            std::cout << "Asteroid projectile speed: " << dir.x << ' ' << dir.y << std::endl;
+#endif
+
+            eid = gc->gameManager.addEntity();
+            gc->gameManager.addComponent<Position>(eid,
+                aProjectilePos.x,
+                aProjectilePos.y
+            );
+            gc->gameManager.addComponent<Velocity>(eid,
+                dir.x,
+                dir.y
+            );
+            gc->gameManager.addComponent<Acceleration>(eid);
+            gc->gameManager.addComponent<Rotation>(eid, rdist(*context.randomEngine) * 360.0f);
+            gc->gameManager.addComponent<AngularVelocity>(eid, rdist(*context.randomEngine) * 30.0f);
+            gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+            gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+            gc->gameManager.addComponent<Timer>(eid);
+            gc->gameManager.addTag<TAsteroidProjectile>(eid);
+        }
+    }
 
     return false;
 }
@@ -631,6 +676,10 @@ void GameScreen::animateShipThruster(sf::Time dt)
 
 void GameScreen::playerInput(sf::Time dt, Context context)
 {
+    if(playerHP <= 0)
+    {
+        return;
+    }
     if((flags & 0x10) != 0 && (flags & 0x20) == 0)
     {
         if(((flags & 0x40) == 0 && (flags & 0x80) == 0) ||

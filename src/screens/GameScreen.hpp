@@ -20,6 +20,9 @@
 #define GAME_ASTEROID_EXPLOSIONS_INTERVAL 0.2f
 #define GAME_SCREEN_FLASH_FAST_TIME 0.5f
 #define GAME_SCREEN_FLASH_SLOW_TIME 1.2f
+#define GAME_ASTEROID_PHASE_1_FIRE_TIME 0.5f
+#define GAME_ASTEROID_PHASE_1_FIRE_SPEED 350.0f
+#define GAME_ASTEROID_PROJECTILE_LIFETIME 4.0f
 
 #include <engine/state.hpp>
 
@@ -85,6 +88,7 @@ private:
     float asteroidExplosionsTimer;
     unsigned int asteroidExplosionsCount;
     float screenFlashTimer;
+    float asteroidFireTimer;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt, Context context);
