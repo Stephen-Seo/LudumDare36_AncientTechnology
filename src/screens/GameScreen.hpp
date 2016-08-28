@@ -13,6 +13,8 @@
 #define GAME_FIRE_TIME 0.35f
 #define GAME_FIRE_VELOCITY 800.0f
 #define GAME_FIRE_LIFETIME 4.0f
+#define GAME_ASTEROID_PHASE_0_HP 20
+#define GAME_ASTEROID_PHASE_1_HP 50
 
 #include <engine/state.hpp>
 
@@ -69,11 +71,14 @@ private:
     sf::Sprite healthBar[2];
     float playerRegenTimer;
     float fireTimer;
+    int asteroidHP;
+    unsigned int asteroidPhase;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt, Context context);
     void playerHurt(int damage);
     void updateHealthBar(Context context);
+    void asteroidHurt(int damage);
 
 };
 

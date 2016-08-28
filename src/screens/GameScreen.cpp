@@ -38,7 +38,9 @@ shipTimer{0, 0},
 shipPos(480.0f, 480.0f),
 playerHP(GAME_MAX_PLAYER_HP),
 playerInvisTime(0.0f),
-playerRegenTimer(0)
+playerRegenTimer(0),
+asteroidHP(GAME_ASTEROID_PHASE_0_HP),
+asteroidPhase(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
@@ -345,33 +347,38 @@ bool GameScreen::update(sf::Time dt, Context context)
             transform = sf::Transform::Identity;
             transform.rotate(this->ship[0].getRotation(), this->ship[0].getPosition());
             sf::Vector2f shipEdge;
-#ifndef NDEBUG
-//            bool noCollide = true;
-#endif
             for(unsigned int i = 0; i < 16; i += 2)
             {
                 shipEdge = transform * (this->ship[0].getPosition() +
                     sf::Vector2f(GameScreen::playerEdges[i], GameScreen::playerEdges[i + 1]));
                 if(Utility::isWithinPolygon(coords, shipEdge.x, shipEdge.y))
                 {
-//                    this->ship[0].setColor(sf::Color::Red);
                     playerHurt(30);
-#ifndef NDEBUG
-//                    std::cout << "colliding" << std::endl;
-//                    noCollide = false;
-#endif
                     break;
                 }
-//                    this->ship[0].setColor(sf::Color::White);
             }
-#ifndef NDEBUG
-/*
-            if(noCollide)
+
+            // collision between asteroid and projectiles
+            gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &coords]
+               (std::size_t eid,
+                Position& pos,
+                Velocity& vel,
+                Acceleration& acc,
+                Rotation& rotation,
+                AngularVelocity& vrotation,
+                Offset& offset,
+                Size& size)
             {
-                std::cout << "Not colliding" << std::endl;
-            }
-*/
-#endif
+                if(!gc->gameManager.hasTag<TProjectile>(eid))
+                {
+                    return;
+                }
+                if(Utility::isWithinPolygon(coords, pos.x, pos.y))
+                {
+                    this->asteroidHurt(1);
+                    gc->gameManager.deleteEntity(eid);
+                }
+            });
         }
     });
 
@@ -713,5 +720,22 @@ void GameScreen::updateHealthBar(Context context)
 
     healthBar[0].setPosition(windowPos.x, windowPos.y + offsety + 540.0f - 160.0f);
     healthBar[1].setPosition(windowPos.x, windowPos.y + 540.0f - 160.0f);
+}
+
+void GameScreen::asteroidHurt(int damage)
+{
+    asteroidHP -= damage;
+    if(asteroidHP <= 0)
+    {
+        switch(asteroidPhase)
+        {
+        case 0:
+            asteroidPhase = 1;
+            asteroidHP = GAME_ASTEROID_PHASE_1_HP;
+            break;
+        default:
+            break;
+        }
+    }
 }
 
