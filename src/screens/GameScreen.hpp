@@ -10,6 +10,9 @@
 #define GAME_MAX_PLAYER_HP 100
 #define GAME_PLAYER_INVIS_TIME 0.5f
 #define GAME_PLAYER_REGEN_TIME 1.0f
+#define GAME_FIRE_TIME 0.35f
+#define GAME_FIRE_VELOCITY 800.0f
+#define GAME_FIRE_LIFETIME 4.0f
 
 #include <engine/state.hpp>
 
@@ -37,7 +40,7 @@ private:
         0001 - panned to asteroid
         0010 - shipThruster flicker
         0100 - shipThruster color reverse
-        1000 - space (fire)
+        1000 - fire
 
         0001 0000 - up
         0010 0000 - down
@@ -65,9 +68,10 @@ private:
     float playerInvisTime;
     sf::Sprite healthBar[2];
     float playerRegenTimer;
+    float fireTimer;
 
     void animateShipThruster(sf::Time dt);
-    void playerInput(sf::Time dt);
+    void playerInput(sf::Time dt, Context context);
     void playerHurt(int damage);
     void updateHealthBar(Context context);
 

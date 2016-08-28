@@ -147,6 +147,14 @@ void GameScreen::draw(Context context)
                 (unsigned char)(r * 35.0f + 35.0f),
                 (unsigned char)((1.0f - timer.time / GAME_ASTEROID_PARTICLE_LIFETIME) * 255.0f)
             ));
+#ifndef NDEBUG
+/*
+            if(gc->gameManager.hasTag<TProjectile>(eid))
+            {
+                std::cout << "ERROR: entity has both Particle and Projectile tags!" << std::endl;
+            }
+*/
+#endif
         }
         else
         {
@@ -249,7 +257,13 @@ bool GameScreen::update(sf::Time dt, Context context)
 
     updateHealthBar(context);
 
-    playerInput(dt);
+    fireTimer -= dt.asSeconds();
+    if(fireTimer < 0)
+    {
+        fireTimer = 0.0f;
+    }
+
+    playerInput(dt, context);
 
     sf::Vector2f updatedPos = shipPos + view.getCenter() - view.getSize() / 2.0f;
     for(unsigned int i = 0; i < 2; ++i)
@@ -305,10 +319,10 @@ bool GameScreen::update(sf::Time dt, Context context)
             asteroidPos = pos;
 
             // collision detection between player and asteroid
-            // x = x * cos + y * sin
-            // y = x * -sin + y * cos
-            // [  cos  sin ]
-            // [ -sin  cos ]
+            // x = x * cos + y * -sin
+            // y = x * sin + y * cos
+            // [  cos -sin ]
+            // [  sin  cos ]
             // ??? probably if memory serves me correctly
             // TODO fix
 
@@ -367,6 +381,10 @@ bool GameScreen::update(sf::Time dt, Context context)
     {
         timer.time += dt.asSeconds();
         if(gc->gameManager.hasTag<TParticle>(eid) && timer.time >= GAME_ASTEROID_PARTICLE_LIFETIME)
+        {
+            gc->gameManager.deleteEntity(eid);
+        }
+        else if(gc->gameManager.hasTag<TProjectile>(eid) && timer.time >= GAME_FIRE_LIFETIME)
         {
             gc->gameManager.deleteEntity(eid);
         }
@@ -471,6 +489,14 @@ bool GameScreen::handleEvent(const sf::Event& event, Context context)
                 bgMusic.play();
             }
         }
+        else
+        {
+            flags |= 0x8;
+        }
+    }
+    else if(event.type == sf::Event::MouseButtonReleased)
+    {
+        flags &= 0xFFFFFFFFFFFFFFF7;
     }
 
     return false;
@@ -522,7 +548,7 @@ void GameScreen::animateShipThruster(sf::Time dt)
     }
 }
 
-void GameScreen::playerInput(sf::Time dt)
+void GameScreen::playerInput(sf::Time dt, Context context)
 {
     if((flags & 0x10) != 0 && (flags & 0x20) == 0)
     {
@@ -623,6 +649,32 @@ void GameScreen::playerInput(sf::Time dt)
     else if(shipPos.y + GAME_SHIP_LIMIT_RADIUS > windowSize.y)
     {
         shipPos.y = windowSize.y - GAME_SHIP_LIMIT_RADIUS;
+    }
+
+    GameContext* gc = static_cast<GameContext*>(context.extraContext);
+
+    if((flags & 0x8) != 0 && fireTimer == 0.0f)
+    {
+        fireTimer = GAME_FIRE_TIME;
+
+        auto eid = gc->gameManager.addEntity();
+        gc->gameManager.addComponent<Position>(eid,
+            ship[0].getPosition().x,
+            ship[0].getPosition().y
+        );
+        float rot = ship[0].getRotation() - 90;
+        float rotRadians = rot * std::acos(-1) / 180;
+        gc->gameManager.addComponent<Velocity>(eid,
+            GAME_FIRE_VELOCITY * std::cos(rotRadians),
+            GAME_FIRE_VELOCITY * std::sin(rotRadians)
+        );
+        gc->gameManager.addComponent<Acceleration>(eid);
+        gc->gameManager.addComponent<Rotation>(eid, rot);
+        gc->gameManager.addComponent<AngularVelocity>(eid);
+        gc->gameManager.addComponent<Offset>(eid, 4.0f, 4.0f);
+        gc->gameManager.addComponent<Size>(eid, 8.0f, 8.0f);
+        gc->gameManager.addComponent<Timer>(eid);
+        gc->gameManager.addTag<TProjectile>(eid);
     }
 }
 
