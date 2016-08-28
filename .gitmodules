@@ -1,6 +1,6 @@
 [submodule "SFML_GameEngine"]
 	path = SFML_GameEngine
-	url = git@github.com:Stephen-Seo/SFML_GameEngine.git
+    url = https://github.com/Stephen-Seo/SFML_GameEngine.git
 [submodule "EntityComponentMetaSystem"]
 	path = EntityComponentMetaSystem
-	url = git@github.com:Stephen-Seo/EntityComponentMetaSystem.git
+    url = https://github.com/Stephen-Seo/EntityComponentMetaSystem.git
