@@ -43,7 +43,8 @@ playerRegenTimer(0),
 asteroidHP(GAME_ASTEROID_PHASE_0_HP),
 asteroidPhase(0),
 asteroidExplosionsTimer(0.0f),
-asteroidExplosionsCount(0)
+asteroidExplosionsCount(0),
+screenFlashTimer(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
@@ -251,6 +252,26 @@ void GameScreen::draw(Context context)
     context.window->draw(healthBar[0]);
     context.window->draw(healthBar[1]);
 
+    // draw screen flash
+    if((flags & 0x200) != 0)
+    {
+        drawRect.setSize(context.window->getView().getSize());
+        drawRect.setPosition(context.window->getView().getCenter() - drawRect.getSize() / 2.0f);
+        drawRect.setFillColor(sf::Color(255, 255, 255, (int)(255.0f * screenFlashTimer / GAME_SCREEN_FLASH_FAST_TIME)));
+        drawRect.setOrigin(0, 0);
+        drawRect.setRotation(0);
+        context.window->draw(drawRect);
+    }
+    else if((flags & 0x400) != 0)
+    {
+        drawRect.setSize(context.window->getView().getSize());
+        drawRect.setPosition(context.window->getView().getCenter() - drawRect.getSize() / 2.0f);
+        drawRect.setFillColor(sf::Color(255, 255, 255, (int)(255.0f * screenFlashTimer / GAME_SCREEN_FLASH_SLOW_TIME)));
+        drawRect.setOrigin(0, 0);
+        drawRect.setRotation(0);
+        context.window->draw(drawRect);
+    }
+
     if(++drawFrameTimer >= 60)
     {
         drawFrameTimer -= 60;
@@ -296,6 +317,17 @@ bool GameScreen::update(sf::Time dt, Context context)
         if(playerHP > GAME_MAX_PLAYER_HP)
         {
             playerHP = GAME_MAX_PLAYER_HP;
+        }
+    }
+
+    if((flags & 0x200) != 0 || (flags & 0x400) != 0)
+    {
+        screenFlashTimer += dt.asSeconds();
+        if(((flags & 0x200) != 0 && screenFlashTimer >= GAME_SCREEN_FLASH_FAST_TIME) ||
+            ((flags & 0x400) != 0 && screenFlashTimer >= GAME_SCREEN_FLASH_SLOW_TIME))
+        {
+            screenFlashTimer = 0;
+            flags &= 0xFFFFFFFFFFFFF9FF;
         }
     }
 
@@ -431,15 +463,9 @@ bool GameScreen::update(sf::Time dt, Context context)
         Timer& timer)
     {
         timer.time += dt.asSeconds();
-        if(gc->gameManager.hasTag<TParticle>(eid) && timer.time >= GAME_ASTEROID_PARTICLE_LIFETIME)
-        {
-            gc->gameManager.deleteEntity(eid);
-        }
-        else if(gc->gameManager.hasTag<TProjectile>(eid) && timer.time >= GAME_FIRE_LIFETIME)
-        {
-            gc->gameManager.deleteEntity(eid);
-        }
-        else if(gc->gameManager.hasTag<TExplosion>(eid) && timer.time >= GAME_EXPLOSION_LIFETIME)
+        if((gc->gameManager.hasTag<TParticle>(eid) && timer.time >= GAME_ASTEROID_PARTICLE_LIFETIME) ||
+            (gc->gameManager.hasTag<TProjectile>(eid) && timer.time >= GAME_FIRE_LIFETIME) ||
+            (gc->gameManager.hasTag<TExplosion>(eid) && timer.time >= GAME_EXPLOSION_LIFETIME))
         {
             gc->gameManager.deleteEntity(eid);
         }
@@ -782,6 +808,7 @@ void GameScreen::asteroidHurt(int damage)
             asteroidPhase = 1;
             asteroidHP = GAME_ASTEROID_PHASE_1_HP;
             asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
+            flags |= 0x200;
         }
             break;
         default:

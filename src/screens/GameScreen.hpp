@@ -17,7 +17,9 @@
 #define GAME_ASTEROID_PHASE_1_HP 50
 #define GAME_EXPLOSION_LIFETIME 1.5f
 #define GAME_ASTEROID_PHASE_0_EXPLOSIONS 7
-#define GAME_ASTEROID_EXPLOSIONS_INTERVAL 0.3f
+#define GAME_ASTEROID_EXPLOSIONS_INTERVAL 0.2f
+#define GAME_SCREEN_FLASH_FAST_TIME 0.5f
+#define GAME_SCREEN_FLASH_SLOW_TIME 1.2f
 
 #include <engine/state.hpp>
 
@@ -53,6 +55,8 @@ private:
         1000 0000 - right
 
         0001 0000 0000 - mute music
+        0010 0000 0000 - screen flash fast
+        0100 0000 0000 - screen flash slow
     */
     uint64_t flags;
     std::uniform_real_distribution<> rdist;
@@ -80,6 +84,7 @@ private:
     sf::CircleShape drawCircle;
     float asteroidExplosionsTimer;
     unsigned int asteroidExplosionsCount;
+    float screenFlashTimer;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt, Context context);
