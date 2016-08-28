@@ -35,15 +35,20 @@ garbageTimer(0),
 drawFrameTimer(0),
 timer(0),
 shipTimer{0, 0},
-shipPos(480.0f, 480.0f)
+shipPos(480.0f, 480.0f),
+playerHP(GAME_MAX_PLAYER_HP),
+playerInvisTime(0.0f),
+playerRegenTimer(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
     context.resourceManager->registerTexture(*this, "res/volumeButton.png");
+    context.resourceManager->registerTexture(*this, "res/healthBar.png");
     context.resourceManager->loadResources();
 
     sf::Texture& planetTexture = context.resourceManager->getTexture("res/Planet.png");
     sf::Texture& shipTexture = context.resourceManager->getTexture("res/ship.png");
+    sf::Texture& healthBarTexture = context.resourceManager->getTexture("res/healthBar.png");
 
     planetRect.setSize(sf::Vector2f(1024.0f, 1024.0f));
     planetRect.setTexture(&planetTexture, true);
@@ -63,6 +68,12 @@ shipPos(480.0f, 480.0f)
 
     volumeButton.setTexture(volumeTexture);
     volumeButton.setTextureRect(sf::IntRect(0, 0, 64, 64));
+
+    for(unsigned int i = 0; i < 2; ++i)
+    {
+        healthBar[i].setTexture(healthBarTexture);
+        healthBar[i].setTextureRect(sf::IntRect(i * 64, 0, 64, 160));
+    }
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
 
@@ -185,6 +196,9 @@ void GameScreen::draw(Context context)
         context.window->draw(volumeButton);
     }
 
+    context.window->draw(healthBar[0]);
+    context.window->draw(healthBar[1]);
+
     if(++drawFrameTimer >= 60)
     {
         drawFrameTimer -= 60;
@@ -211,6 +225,29 @@ bool GameScreen::update(sf::Time dt, Context context)
             context.window->setView(view);
         }
     }
+
+    playerInvisTime -= dt.asSeconds();
+    if(playerInvisTime < 0.0f)
+    {
+        playerInvisTime = 0.0f;
+        if(playerHP > 0)
+        {
+            ship[0].setColor(sf::Color::White);
+        }
+    }
+
+    playerRegenTimer += dt.asSeconds();
+    if(playerRegenTimer >= GAME_PLAYER_REGEN_TIME)
+    {
+        playerRegenTimer = 0;
+        playerHP += 5;
+        if(playerHP > GAME_MAX_PLAYER_HP)
+        {
+            playerHP = GAME_MAX_PLAYER_HP;
+        }
+    }
+
+    updateHealthBar(context);
 
     playerInput(dt);
 
@@ -295,7 +332,7 @@ bool GameScreen::update(sf::Time dt, Context context)
             transform.rotate(this->ship[0].getRotation(), this->ship[0].getPosition());
             sf::Vector2f shipEdge;
 #ifndef NDEBUG
-            bool noCollide = true;
+//            bool noCollide = true;
 #endif
             for(unsigned int i = 0; i < 16; i += 2)
             {
@@ -303,20 +340,23 @@ bool GameScreen::update(sf::Time dt, Context context)
                     sf::Vector2f(GameScreen::playerEdges[i], GameScreen::playerEdges[i + 1]));
                 if(Utility::isWithinPolygon(coords, shipEdge.x, shipEdge.y))
                 {
-                    this->ship[0].setColor(sf::Color::Red);
+//                    this->ship[0].setColor(sf::Color::Red);
+                    playerHurt(30);
 #ifndef NDEBUG
-                    std::cout << "colliding" << std::endl;
-                    noCollide = false;
+//                    std::cout << "colliding" << std::endl;
+//                    noCollide = false;
 #endif
                     break;
                 }
-                    this->ship[0].setColor(sf::Color::White);
+//                    this->ship[0].setColor(sf::Color::White);
             }
 #ifndef NDEBUG
+/*
             if(noCollide)
             {
                 std::cout << "Not colliding" << std::endl;
             }
+*/
 #endif
         }
     });
@@ -460,19 +500,25 @@ void GameScreen::animateShipThruster(sf::Time dt)
     }
     if((flags & 0x4) == 0)
     {
-        ship[1].setColor(sf::Color(
-            127,
-            (unsigned char)(shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE * 255.0f),
-            (unsigned char)((1.0f - shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE) * 255.0f)
-        ));
+        if(playerHP > 0)
+        {
+            ship[1].setColor(sf::Color(
+                127,
+                (unsigned char)(shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE * 255.0f),
+                (unsigned char)((1.0f - shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE) * 255.0f)
+            ));
+        }
     }
     else
     {
-        ship[1].setColor(sf::Color(
-            127,
-            (unsigned char)((1.0f - shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE) * 200.0f + 55.0f),
-            (unsigned char)(shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE * 200.0f + 55.0f)
-        ));
+        if(playerHP > 0)
+        {
+            ship[1].setColor(sf::Color(
+                127,
+                (unsigned char)((1.0f - shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE) * 200.0f + 55.0f),
+                (unsigned char)(shipTimer[1] / GAME_THRUSTER_COLOR_FADE_RATE * 200.0f + 55.0f)
+            ));
+        }
     }
 }
 
@@ -578,5 +624,42 @@ void GameScreen::playerInput(sf::Time dt)
     {
         shipPos.y = windowSize.y - GAME_SHIP_LIMIT_RADIUS;
     }
+}
+
+void GameScreen::playerHurt(int damage)
+{
+    if(playerInvisTime != 0.0f)
+    {
+        return;
+    }
+
+    playerHP -= damage;
+    playerInvisTime = GAME_PLAYER_INVIS_TIME;
+
+    if(playerHP <= 0)
+    {
+        for(unsigned int i = 0; i < 2; ++i)
+        {
+            ship[i].setColor(sf::Color(0, 0, 0, 0));
+        }
+    }
+    else
+    {
+        ship[0].setColor(sf::Color::Red);
+    }
+}
+
+void GameScreen::updateHealthBar(Context context)
+{
+    float percentage = (float)(playerHP > 0 ? playerHP : 0) / GAME_MAX_PLAYER_HP;
+
+    float offsety = 160.0f - 160.0f * percentage;
+
+    healthBar[0].setTextureRect(sf::IntRect(0, offsety, 64, 160.0f * percentage));
+
+    sf::Vector2f windowPos = context.window->getView().getCenter() - context.window->getView().getSize() / 2.0f;
+
+    healthBar[0].setPosition(windowPos.x, windowPos.y + offsety + 540.0f - 160.0f);
+    healthBar[1].setPosition(windowPos.x, windowPos.y + 540.0f - 160.0f);
 }
 

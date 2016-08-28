@@ -7,6 +7,9 @@
 #define GAME_THRUSTER_COLOR_FADE_RATE 1.5f
 #define GAME_PLAYER_SPEED 200.0f
 #define GAME_SHIP_LIMIT_RADIUS 16.0f
+#define GAME_MAX_PLAYER_HP 100
+#define GAME_PLAYER_INVIS_TIME 0.5f
+#define GAME_PLAYER_REGEN_TIME 1.0f
 
 #include <engine/state.hpp>
 
@@ -58,9 +61,15 @@ private:
     sf::Music bgMusic;
     sf::Vector2i mousePos;
     sf::Sprite volumeButton;
+    int playerHP;
+    float playerInvisTime;
+    sf::Sprite healthBar[2];
+    float playerRegenTimer;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt);
+    void playerHurt(int damage);
+    void updateHealthBar(Context context);
 
 };
 
