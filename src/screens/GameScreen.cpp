@@ -334,6 +334,12 @@ bool GameScreen::update(sf::Time dt, Context context)
             asteroidPhase = 7;
             timer = 0;
             gc->gameManager.deleteEntity(asteroidID);
+            bgMusic.openFromFile("res/LudumDare36_Peace.ogg");
+            bgMusic.setLoop(true);
+            if((flags & 0x100) == 0)
+            {
+                bgMusic.play();
+            }
         }
     }
 
