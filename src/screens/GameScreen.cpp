@@ -2,6 +2,7 @@
 #include "GameScreen.hpp"
 
 #include <cmath>
+#include <list>
 
 #include <engine/resourceManager.hpp>
 #include <engine/utility.hpp>
@@ -40,17 +41,21 @@ playerHP(GAME_MAX_PLAYER_HP),
 playerInvisTime(0.0f),
 playerRegenTimer(0),
 asteroidHP(GAME_ASTEROID_PHASE_0_HP),
-asteroidPhase(0)
+asteroidPhase(0),
+asteroidExplosionsTimer(0.0f),
+asteroidExplosionsCount(0)
 {
     context.resourceManager->registerTexture(*this, "res/Planet.png");
     context.resourceManager->registerTexture(*this, "res/ship.png");
     context.resourceManager->registerTexture(*this, "res/volumeButton.png");
     context.resourceManager->registerTexture(*this, "res/healthBar.png");
+    context.resourceManager->registerTexture(*this, "res/asteroidSymbol.png");
     context.resourceManager->loadResources();
 
     sf::Texture& planetTexture = context.resourceManager->getTexture("res/Planet.png");
     sf::Texture& shipTexture = context.resourceManager->getTexture("res/ship.png");
     sf::Texture& healthBarTexture = context.resourceManager->getTexture("res/healthBar.png");
+    asteroidSymbolTexture = &context.resourceManager->getTexture("res/asteroidSymbol.png");
 
     planetRect.setSize(sf::Vector2f(1024.0f, 1024.0f));
     planetRect.setTexture(&planetTexture, true);
@@ -126,7 +131,9 @@ void GameScreen::draw(Context context)
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
 
-    gc->gameManager.forMatchingSignature<EntitySignature>([this, &context, &gc]
+    std::list<sf::CircleShape> explosionsList;
+
+    gc->gameManager.forMatchingSignature<EntitySignature>([this, &context, &gc, &explosionsList]
        (std::size_t eid,
         Position& pos,
         Velocity& vel,
@@ -149,26 +156,41 @@ void GameScreen::draw(Context context)
                 (unsigned char)(r * 35.0f + 35.0f),
                 (unsigned char)((1.0f - timer.time / GAME_ASTEROID_PARTICLE_LIFETIME) * 255.0f)
             ));
-#ifndef NDEBUG
-/*
-            if(gc->gameManager.hasTag<TProjectile>(eid))
-            {
-                std::cout << "ERROR: entity has both Particle and Projectile tags!" << std::endl;
-            }
-*/
-#endif
         }
         else
         {
             this->drawRect.setFillColor(sf::Color::White);
         }
 
-        this->drawRect.setSize(sf::Vector2f(size.width, size.height));
-        this->drawRect.setPosition(pos.x, pos.y);
-        this->drawRect.setOrigin(offset.x, offset.y);
-        this->drawRect.setRotation(rotation.rotation);
+        if(!gc->gameManager.hasTag<TExplosion>(eid))
+        {
+            this->drawRect.setSize(sf::Vector2f(size.width, size.height));
+            this->drawRect.setPosition(pos.x, pos.y);
+            this->drawRect.setOrigin(offset.x, offset.y);
+            this->drawRect.setRotation(rotation.rotation);
 
-        context.window->draw(this->drawRect);
+            context.window->draw(this->drawRect);
+        }
+        else
+        {
+            Timer& timer = gc->gameManager.getEntityData<Timer>(eid);
+
+            float growth = 64.0f * timer.time / GAME_EXPLOSION_LIFETIME;
+            this->drawCircle.setRadius(size.width / 2.0f + growth);
+            this->drawCircle.setPosition(pos.x, pos.y);
+            this->drawCircle.setOrigin(size.width / 2.0f + growth, size.width / 2.0f + growth);
+
+            int value = (timer.time / GAME_EXPLOSION_LIFETIME) * 255.0f;
+            int alpha = (timer.time < GAME_EXPLOSION_LIFETIME / 2.0f ? 255 : 255.0f * (1.0f - (timer.time - GAME_EXPLOSION_LIFETIME / 2.0f) / (GAME_EXPLOSION_LIFETIME / 2.0F)));
+            this->drawCircle.setFillColor(sf::Color(
+                255,
+                value,
+                value,
+                alpha));
+
+//                context.window->draw(this->drawCircle);
+            explosionsList.push_back(drawCircle);
+        }
     });
 
     // draw asteroid
@@ -194,6 +216,26 @@ void GameScreen::draw(Context context)
     drawRect.setFillColor(asteroidColor);
 
     context.window->draw(drawRect);
+
+    // draw asteroid symbol
+    drawRect.setTexture(asteroidSymbolTexture, true);
+    if(asteroidPhase != 0)
+    {
+        drawRect.setFillColor(sf::Color::White);
+    }
+    else
+    {
+        int alpha = (int)(255.0f * (1.0f - (float)asteroidHP / (float)GAME_ASTEROID_PHASE_0_HP));
+        drawRect.setFillColor(sf::Color(255, 255, 255, alpha));
+    }
+    context.window->draw(drawRect);
+    drawRect.setTexture(nullptr);
+
+    // draw explosions
+    for(auto explosion : explosionsList)
+    {
+        context.window->draw(explosion);
+    }
 
     if((flags & 0x100) == 0)
     {
@@ -259,6 +301,8 @@ bool GameScreen::update(sf::Time dt, Context context)
 
     updateHealthBar(context);
 
+    checkAsteroidExplosions(dt, context);
+
     fireTimer -= dt.asSeconds();
     if(fireTimer < 0)
     {
@@ -289,7 +333,7 @@ bool GameScreen::update(sf::Time dt, Context context)
 
     GameContext* gc = static_cast<GameContext*>(context.extraContext);
 
-    gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &asteroidPos]
+    gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &asteroidPos, &context]
        (std::size_t eid,
         Position& pos,
         Velocity& vel,
@@ -359,7 +403,7 @@ bool GameScreen::update(sf::Time dt, Context context)
             }
 
             // collision between asteroid and projectiles
-            gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &coords]
+            gc->gameManager.forMatchingSignature<EntitySignature>([this, &gc, &dt, &coords, &context]
                (std::size_t eid,
                 Position& pos,
                 Velocity& vel,
@@ -392,6 +436,10 @@ bool GameScreen::update(sf::Time dt, Context context)
             gc->gameManager.deleteEntity(eid);
         }
         else if(gc->gameManager.hasTag<TProjectile>(eid) && timer.time >= GAME_FIRE_LIFETIME)
+        {
+            gc->gameManager.deleteEntity(eid);
+        }
+        else if(gc->gameManager.hasTag<TExplosion>(eid) && timer.time >= GAME_EXPLOSION_LIFETIME)
         {
             gc->gameManager.deleteEntity(eid);
         }
@@ -730,11 +778,45 @@ void GameScreen::asteroidHurt(int damage)
         switch(asteroidPhase)
         {
         case 0:
+        {
             asteroidPhase = 1;
             asteroidHP = GAME_ASTEROID_PHASE_1_HP;
+            asteroidExplosionsCount = GAME_ASTEROID_PHASE_0_EXPLOSIONS;
+        }
             break;
         default:
             break;
+        }
+    }
+}
+
+void GameScreen::checkAsteroidExplosions(sf::Time dt, Context context)
+{
+    asteroidExplosionsTimer -= dt.asSeconds();
+    if(asteroidExplosionsTimer <= 0)
+    {
+        asteroidExplosionsTimer = GAME_ASTEROID_EXPLOSIONS_INTERVAL;
+        if(asteroidExplosionsCount > 0)
+        {
+            --asteroidExplosionsCount;
+
+            GameContext* gc = static_cast<GameContext*>(context.extraContext);
+
+            Position& asteroidPosition = gc->gameManager.getEntityData<Position>(asteroidID);
+
+            auto eid = gc->gameManager.addEntity();
+            gc->gameManager.addComponent<Position>(eid,
+                asteroidPosition.x + rdist(*context.randomEngine) * 128.0f - 64.0f,
+                asteroidPosition.y + rdist(*context.randomEngine) * 128.0f - 64.0f
+            );
+            gc->gameManager.addComponent<Velocity>(eid);
+            gc->gameManager.addComponent<Acceleration>(eid);
+            gc->gameManager.addComponent<Rotation>(eid);
+            gc->gameManager.addComponent<AngularVelocity>(eid);
+            gc->gameManager.addComponent<Offset>(eid, 16.0f, 16.0f);
+            gc->gameManager.addComponent<Size>(eid, 32.0f, 32.0f);
+            gc->gameManager.addComponent<Timer>(eid);
+            gc->gameManager.addTag<TExplosion>(eid);
         }
     }
 }

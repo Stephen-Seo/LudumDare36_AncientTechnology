@@ -29,13 +29,15 @@ struct TEnemy {};
 struct TAsteroid {};
 struct TParticle {};
 struct TProjectile {};
+struct TExplosion {};
 
 using GameTagsList = EC::Meta::TypeList<
     TPlayer,
     TEnemy,
     TAsteroid,
     TParticle,
-    TProjectile
+    TProjectile,
+    TExplosion
 >;
 
 #endif

@@ -15,6 +15,9 @@
 #define GAME_FIRE_LIFETIME 4.0f
 #define GAME_ASTEROID_PHASE_0_HP 20
 #define GAME_ASTEROID_PHASE_1_HP 50
+#define GAME_EXPLOSION_LIFETIME 1.5f
+#define GAME_ASTEROID_PHASE_0_EXPLOSIONS 7
+#define GAME_ASTEROID_EXPLOSIONS_INTERVAL 0.3f
 
 #include <engine/state.hpp>
 
@@ -73,12 +76,17 @@ private:
     float fireTimer;
     int asteroidHP;
     unsigned int asteroidPhase;
+    sf::Texture* asteroidSymbolTexture;
+    sf::CircleShape drawCircle;
+    float asteroidExplosionsTimer;
+    unsigned int asteroidExplosionsCount;
 
     void animateShipThruster(sf::Time dt);
     void playerInput(sf::Time dt, Context context);
     void playerHurt(int damage);
     void updateHealthBar(Context context);
     void asteroidHurt(int damage);
+    void checkAsteroidExplosions(sf::Time dt, Context context);
 
 };
 
