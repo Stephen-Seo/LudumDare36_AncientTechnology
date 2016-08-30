@@ -6,7 +6,8 @@ LudumDare: http://ludumdare.com/
 
 # Compiling
 
-You will need to run `git submodule init` and `git submodule update` in this directory AND within the SFML\_GameEngine submodule.
+You will need to load all submodules with a single `git submodule update --init --recursive`.  
+~~You will need to run `git submodule init` and `git submodule update` in this directory AND within the SFML\_GameEngine submodule.~~
 
 do  
 ```
